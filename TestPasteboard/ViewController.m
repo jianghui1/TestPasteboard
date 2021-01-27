@@ -13,36 +13,68 @@
 
 @implementation ViewController
 {
-    UILabel *_label1;
-    UILabel *_label2;
+    UILabel *_label;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    _label1 = [[UILabel alloc] initWithFrame:CGRectMake(100, 100, 100, 100)];
-    _label1.backgroundColor = [UIColor redColor];
-    [self.view addSubview:_label1];
-    
-    _label2 = [[UILabel alloc] initWithFrame:CGRectMake(100, 300, 100, 100)];
-    _label2.backgroundColor = [UIColor redColor];
-    [self.view addSubview:_label2];
-    
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    button.frame = CGRectMake(100, 500, 100, 100);
-    button.backgroundColor = [UIColor redColor];
-    [button addTarget:self action:@selector(buttonAction) forControlEvents:UIControlEventTouchUpInside];
-    [button setTitle:@"点我哟" forState:UIControlStateNormal];
-    [self.view addSubview:button];
-    
+    _label = [[UILabel alloc] initWithFrame:CGRectMake(0, 88, self.view.bounds.size.width, self.view.bounds.size.height - 2 * 88)];
+    _label.numberOfLines = 0;
+    _label.font = [UIFont systemFontOfSize:30];
+    _label.textAlignment = NSTextAlignmentCenter;
+    [self.view addSubview:_label];
     
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(checkTKL) name:UIApplicationDidBecomeActiveNotification object:nil];
+    
+    NSArray *urls = @[
+        @"1wo",
+        @"1我",
+        @"wo1",
+        @"我1",
+        @"wo 1",
+        @"我 1",
+    ];
+    for (NSString *s in urls) {
+        NSScanner *sc = [NSScanner scannerWithString:s];
+        int i;
+        [sc scanInt:&i];
+        NSLog(@"todo  --- %@ ---- %d", s, i);
+    }
+    
+    urls = @[
+        @"mg://aaa?b=c",
+        @"mg://aaa?b= c",
+        @"mg://aaa?b=+c"
+    ];
+    for (NSString *s in urls) {
+        NSURL *url = [NSURL URLWithString:s];
+        if (url) {
+            NSLog(@"todo --- %@", url);
+        }
+    }
+    
+    NSString *s = @"mg://aaa?b=c&d={\"e\": 7}";
+    s = [self urlEncodeToString:s];
+    NSURLComponents *components = [NSURLComponents componentsWithString:s];
+    NSArray *items = components.queryItems;
+    NSLog(@"todo --- %@", items);
+}
+
+- (NSString *)urlEncodeToString:(NSString *)input {
+    if (!input) {
+        return @"";
+    }
+    static NSString * const kGeneralDelimitersToEncode = @":#[]@"; // does not include "?" or "/" due to RFC 3986 - Section 3.4
+    static NSString * const kSubDelimitersToEncode = @"!$&'()*+,;=";
+    
+    NSMutableCharacterSet * allowedCharacterSet = [[NSCharacterSet URLQueryAllowedCharacterSet] mutableCopy];
+    [allowedCharacterSet removeCharactersInString:[kGeneralDelimitersToEncode stringByAppendingString:kSubDelimitersToEncode]];
+    return [input stringByAddingPercentEncodingWithAllowedCharacters:allowedCharacterSet];
 }
 
 - (void)checkTKL
 {
-    _label1.text = @"";
-    _label2.text = @"";
     
     /*
      復製这条（(aZa0c4wZVKL)）进入【Tao宝】即可
@@ -111,6 +143,71 @@
      
      */
     
+    /*
+     数字
+     1          ✅
+     11         ✅
+     1wo        ✅
+     1我        ✅
+     wo1        ❎
+     我1        ❎
+     wo 1       ❎
+     我 1        ❎
+     */
+    
+    /*
+     链接
+     http://www.zutuan.cn       ✅
+     http://                    ✅
+     https://                   ✅
+     http:/                     ✅
+     http:                      ❎
+     http                       ❎
+     p://                       ✅
+     p:/                        ✅
+     p:                         ❎
+     ://                        ❎
+     :/                         ❎
+     :                          ❎
+     //                         ❎
+     /                          ❎
+     
+     我:/                        ✅
+     我:/们                      ❎
+     我:/ 们                     ✅
+     我:/a们                     ❎
+     
+     我http://www.zutuan.cn们    ❎
+     我http://www.zutuan.cn 们   ❎
+     我 http://www.zutuan.cn们   ✅
+     我 http://www.zutuan.cn 们  ✅
+     
+     ahttp://www.zutuan.cnb     ✅
+     ahttp://www.zutuan.cn b    ✅
+     a http://www.zutuan.cnb    ✅
+     a http://www.zutuan.cn b   ✅
+     
+     我ahttp://www.zutuan.cnb   ❎
+     我 ahttp://www.zutuan.cnb  ✅
+     
+     */
+    
+    /*
+     数字+链接
+     1我:/ 们                     ✅
+     1 我:/ 们                    ✅
+     1 我:/们                     ❎
+     1 我 :/们                    ❎
+     1 我 :/ 们                   ❎
+     1 我:/a们                    ❎
+     */
+    
+    /*
+     数字必须开头
+     正常链接前面但凡有中文(就算不挨着)，需要空格
+     最短链接 :/ ，后面必须空格
+     */
+    
     UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
     
     void (^checkBlock)(NSSet *set, int type) = ^(NSSet *set, int type) {
@@ -126,35 +223,31 @@
 //                    NSLog(@"todo --- hehe");
                 }
             }
-            if (isNumber && isUrl) {
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    NSString *s = pasteboard.string;
-                    NSLog(@"todo -- %@", s);
-                    if (type == 1) {
-                        self->_label1.text = @"1";
+                    if (isNumber && isUrl) {
+                        NSString *s = pasteboard.string;
+                        NSLog(@"todo - number & url - %@", s);
+                        self->_label.text = s;
                     }
-                    else if (type == 2) {
-                        self->_label2.text = @"2";
+                    else if (isNumber) {
+                        NSString *s = pasteboard.string;
+                        NSLog(@"todo - number - %@", s);
+                        self->_label.text = s;
+                    }
+                    else if (isUrl) {
+                        NSString *s = pasteboard.string;
+                        NSLog(@"todo - url - %@", s);
+                        self->_label.text = s;
+                    }
+                    else {
+                        self->_label.text = @"没有匹配";
                     }
                 });
-            }
     };
     
     [pasteboard detectPatternsForPatterns:[NSSet setWithObjects:UIPasteboardDetectionPatternNumber, UIPasteboardDetectionPatternProbableWebURL, UIPasteboardDetectionPatternProbableWebSearch, nil] completionHandler:^(NSSet<UIPasteboardDetectionPattern> * _Nullable set, NSError * _Nullable error) {
         checkBlock(set, 1);
         }];
-    
-    [pasteboard detectPatternsForPatterns:[NSSet setWithObjects:UIPasteboardDetectionPatternNumber, nil] inItemSet:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(1, 1)] completionHandler:^(NSArray<NSSet<UIPasteboardDetectionPattern> *> * _Nullable set, NSError * _Nullable error) {
-        NSLog(@"todo ---- %@", set);
-    }];
-}
-
-- (void)buttonAction
-{
-    UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
-    NSLog(@"todo ----- %@", pasteboard.strings);
-    pasteboard.strings = @[@"wo", @"111"];
-    NSLog(@"todo ----- %@", pasteboard.strings);
 }
 
 @end
